@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Piggy Bank Dapp</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.7.4/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .section {
+            margin-bottom: 20px;
+        }
+        input, button {
+            margin: 10px 0;
+            padding: 10px;
+            width: 100%;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #depositList {
+            margin-top: 20px;
+        }
+        .deposit-item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🐷 Piggy Bank Dapp</h1>
+        
+        <div class="section">
+            <h2>Wallet Connection</h2>
+            <button id="connectWallet">Connect Wallet</button>
+            <p id="walletStatus">Not Connected</p>
+        </div>
+
+        <div class="section">
+            <h2>Deposit Funds</h2>
+            <input type="number" id="depositAmount" placeholder="Amount (ETH)">
+            <input type="number" id="lockPeriod" placeholder="Lock Period (seconds)">
+            <button id="depositButton">Deposit</button>
+        </div>
+
+        <div class="section">
+            <h2>My Deposits</h2>
+            <button id="loadDeposits">Load Deposits</button>
+            <div id="depositList"></div>
+        </div>
+    </div>
+
+    <script>
+        // Contract ABI and Address (replace with your deployed contract details)
+        const contractABI = [
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_lockPeriod",
+				"type": "uint256"
+			}
+		],
+		"name": "deposit",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_depositIndex",
+				"type": "uint256"
+			}
+		],
+		"name": "emergencyWithdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "EmergencyWithdrawal",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "unlockTime",
+				"type": "uint256"
+			}
+		],
+		"name": "FundsDeposited",
+		"type": "event"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": true,
+				"internalType": "address",
+				"name": "user",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			}
+		],
+		"name": "FundsWithdrawn",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_depositIndex",
+				"type": "uint256"
+			}
+		],
+		"name": "withdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getDepositCount",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getDeposits",
+		"outputs": [
+			{
+				"components": [
+					{
+						"internalType": "uint256",
+						"name": "amount",
+						"type": "uint256"
+					},
+					{
+						"internalType": "uint256",
+						"name": "unlockTime",
+						"type": "uint256"
+					},
+					{
+						"internalType": "bool",
+						"name": "withdrawn",
+						"type": "bool"
+					}
+				],
+				"internalType": "struct PiggyBank.Deposit[]",
+				"name": "",
+				"type": "tuple[]"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			},
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"name": "userDeposits",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "amount",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "unlockTime",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "withdrawn",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+];
+        const contractAddress = '0xcd95186ecb59210b8e649303e3e377449972e520'; // Replace with actual deployed contract address
+
+        let web3;
+        let contract;
+        let userAccount;
+
+        // Connect Wallet
+        document.getElementById('connectWallet').addEventListener('click', async () => {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                try {
+                    // Request account access
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    const accounts = await web3.eth.getAccounts();
+                    userAccount = accounts[0];
+                    
+                    // Initialize contract
+                    contract = new web3.eth.Contract(contractABI, contractAddress);
+
+                    document.getElementById('walletStatus').textContent = `Connected: ${userAccount}`;
+                } catch (error) {
+                    console.error("User denied account access");
+                }
+            } else {
+                alert('Please install MetaMask!');
+            }
+        });
+
+        // Deposit Funds
+        document.getElementById('depositButton').addEventListener('click', async () => {
+            if (!contract) {
+                alert('Please connect wallet first!');
+                return;
+            }
+
+            const amount = document.getElementById('depositAmount').value;
+            const lockPeriod = document.getElementById('lockPeriod').value;
+
+            try {
+                await contract.methods.deposit(lockPeriod).send({
+                    from: userAccount,
+                    value: web3.utils.toWei(amount, 'ether')
+                });
+                alert('Deposit successful!');
+            } catch (error) {
+                console.error('Deposit failed:', error);
+                alert('Deposit failed!');
+            }
+        });
+
+        // Load Deposits
+        document.getElementById('loadDeposits').addEventListener('click', async () => {
+            if (!contract) {
+                alert('Please connect wallet first!');
+                return;
+            }
+
+            try {
+                const deposits = await contract.methods.getDeposits().call({ from: userAccount });
+                const depositList = document.getElementById('depositList');
+                depositList.innerHTML = ''; // Clear previous deposits
+
+                deposits.forEach((deposit, index) => {
+                    const depositItem = document.createElement('div');
+                    depositItem.classList.add('deposit-item');
+                    
+                    const amountInEth = web3.utils.fromWei(deposit.amount, 'ether');
+                    const unlockDate = new Date(deposit.unlockTime * 1000).toLocaleString();
+                    
+                    depositItem.innerHTML = `
+                        <p>Amount: ${amountInEth} ETH</p>
+                        <p>Unlock Time: ${unlockDate}</p>
+                        <p>Status: ${deposit.withdrawn ? 'Withdrawn' : 'Active'}
+                        ${!deposit.withdrawn ? `
+                            <br>
+                            <button onclick="withdrawDeposit(${index})">Withdraw</button>
+                            <button onclick="emergencyWithdraw(${index})">Emergency Withdraw</button>
+                        ` : ''}
+                        </p>
+                    `;
+                    
+                    depositList.appendChild(depositItem);
+                });
+            } catch (error) {
+                console.error('Failed to load deposits:', error);
+                alert('Failed to load deposits!');
+            }
+        });
+
+        // Withdraw Function
+        async function withdrawDeposit(index) {
+            try {
+                await contract.methods.withdraw(index).send({ from: userAccount });
+                alert('Withdrawal successful!');
+                // Reload deposits
+                document.getElementById('loadDeposits').click();
+            } catch (error) {
+                console.error('Withdrawal failed:', error);
+                alert('Withdrawal failed!');
+            }
+        }
+
+        // Emergency Withdraw Function
+        async function emergencyWithdraw(index) {
+            try {
+                await contract.methods.emergencyWithdraw(index).send({ from: userAccount });
+                alert('Emergency withdrawal successful! (50% penalty applied)');
+                // Reload deposits
+                document.getElementById('loadDeposits').click();
+            } catch (error) {
+                console.error('Emergency withdrawal failed:', error);
+                alert('Emergency withdrawal failed!');
+            }
+        }
+    </script>
+</body>
+</html>
